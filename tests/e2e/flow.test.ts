@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest'
 import { parseYdk, sectionDeckToCardIds } from '../../src/ydk/parseYdk'
 import { generateImagePdf } from '../../src/pdf/generatePdf'
 import { getRawCardImageUrl } from '../../src/api/imageApi'
-import { fetchCardText } from '../../src/api/cardApi'
 import { arrayBufferToBase64 } from '../../src/utils/base64'
 import ydkText from '../fixtures/sample.ydk?raw'
 
