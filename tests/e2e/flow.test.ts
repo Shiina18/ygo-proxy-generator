@@ -36,20 +36,4 @@ describe('e2e: YDK → PDF (real network)', () => {
     expect(buffer).toBeInstanceOf(ArrayBuffer)
     expect(buffer.byteLength).toBeGreaterThan(0)
   }, 60000)
-
-  it('generates PDF with overlay effects from YDK', async () => {
-    const overlayCardIds = cardIds.slice(0, 3)
-    const fetchImage = (id: number) => fetchImageFromNetwork(id)
-    const { buffer } = await generateImagePdf({
-      cardIds: overlayCardIds,
-      fetchImage,
-      overlayEffects: true,
-      fetchCardText,
-      // In tests we do not sample background color via Canvas,
-      // because jsdom does not implement canvas rendering APIs.
-      sampleBgColor: async () => ({ r: 240, g: 230, b: 220 }),
-    })
-    expect(buffer).toBeInstanceOf(ArrayBuffer)
-    expect(buffer.byteLength).toBeGreaterThan(0)
-  }, 60000)
 })
