@@ -57,15 +57,8 @@ export function setupApp(root: HTMLDivElement) {
     'input[name="card-language"]',
   )
   const overlayTip = getRequiredElement<HTMLSpanElement>('#overlay-tip', root)
-  const pdfShareAreaEl = getRequiredElement<HTMLDivElement>(
-    '#pdf-share-area',
-    root,
-  )
-  const pdfShareBtn = getRequiredElement<HTMLButtonElement>('#pdf-share', root)
 
   let currentPdfUrl: string | null = null
-  let currentPdfName: string | null = null
-  let currentPdfFile: File | null = null
 
   const maxSpacingMm = computeMaxSpacingMm()
   spacingInput.max = String(maxSpacingMm)
@@ -276,52 +269,15 @@ export function setupApp(root: HTMLDivElement) {
     }
     const blob = new Blob([buffer], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
-    const file = new File([blob], pdfName, { type: 'application/pdf' })
     currentPdfUrl = url
-    currentPdfName = pdfName
-    currentPdfFile = file
-    const ua =
-      typeof navigator !== 'undefined'
-        ? navigator.userAgent || navigator.vendor || (window as any).opera
-        : ''
-    const isMobileDevice = /android|iphone|ipad|ipod/i.test(ua)
-    pdfShareAreaEl.hidden = !isMobileDevice
-    pdfShareBtn.hidden = false
-    setMessage(
-      isMobileDevice
-        ? `已生成 PDF (${pdfName})，请点击分享保存或转发`
-        : `已生成 PDF (${pdfName})，已自动开始下载`,
-    )
-    if (!isMobileDevice && currentPdfUrl && currentPdfName) {
-      const a = document.createElement('a')
-      a.href = currentPdfUrl
-      a.download = currentPdfName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-    }
+    setMessage(`已生成 PDF (${pdfName})，已自动开始下载`)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = pdfName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     setGenerating(false)
-  })
-
-  pdfShareBtn.addEventListener('click', async () => {
-    if (!currentPdfFile || !currentPdfName) return
-    const nav = navigator as Navigator & {
-      share?: (data: { files: File[]; title?: string }) => Promise<void>
-    }
-    if (!nav.share) {
-      setMessage('当前浏览器不支持分享，请用电脑打开本页下载')
-      return
-    }
-    try {
-      await nav.share({
-        files: [currentPdfFile],
-        title: currentPdfName,
-      })
-      setMessage('已分享')
-    } catch (err) {
-      const name = err instanceof Error ? err.name : ''
-      setMessage(name === 'AbortError' ? '已取消分享' : '分享失败')
-    }
   })
 }
 
