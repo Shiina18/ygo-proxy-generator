@@ -1,0 +1,52 @@
+<div class="container">
+  <h1>游戏王代牌打印工具</h1>
+  <div id="drop-zone" class="drop-zone">
+    将 .ydk 文件拖到此处，或点击选择文件
+  </div>
+  <input id="file-input" type="file" accept=".ydk" hidden />
+  <textarea
+    id="ydk-text"
+    class="ydk-text"
+    placeholder="或在此粘贴 YDK 文本…"
+    rows="4"
+  ></textarea>
+  <div class="controls">
+    <div class="language-settings">
+      <span>卡图语言</span>
+      <div class="language-options">
+        <label
+          ><input type="radio" name="card-language" value="zh" checked />
+          中文</label
+        >
+        <label
+          ><input type="radio" name="card-language" value="sc" /> 简中</label
+        >
+        <label
+          ><input type="radio" name="card-language" value="jp" /> 日文</label
+        >
+        <label
+          ><input type="radio" name="card-language" value="en" /> 英文</label
+        >
+      </div>
+    </div>
+    <div class="overlay-settings">
+      <label class="overlay-control">
+        <input type="checkbox" id="overlay-effects" />
+        覆盖效果文本
+      </label>
+      <span id="overlay-tip" class="overlay-tip"></span>
+    </div>
+    <div class="layout-settings">
+      <label class="spacing-control">
+        卡片间距
+        <input type="range" id="card-spacing" min="0" step="1" />
+        <span id="card-spacing-label"></span>
+      </label>
+    </div>
+    <button type="button" id="generate-btn" class="primary-button">
+      生成 PDF
+    </button>
+  </div>
+  <p id="message" class="message"></p>
+  <footer class="footer">Made with dove by C7</footer>
+</div>
