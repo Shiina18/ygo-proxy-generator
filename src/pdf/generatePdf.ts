@@ -34,6 +34,37 @@ const DEFAULT_MIN_DELAY_MS = 100
 // jsPDF 的 text() 用 baseline 定位，首行顶需对齐效果框顶：偏移 = ascent ≈ fontSize×此估计值（常见字体约 0.8）
 const ASCENT_RATIO = 0.8
 
+const LIST_BULLETS = new Set([
+  '●',
+  '①',
+  '②',
+  '③',
+  '④',
+  '⑤',
+  '⑥',
+  '⑦',
+  '⑧',
+  '⑨',
+  '⑩',
+])
+
+const PUNCTUATION = new Set([
+  '，',
+  '。',
+  '．',
+  '、',
+  '！',
+  '？',
+  '：',
+  '；',
+  ',',
+  '.',
+  '!',
+  '?',
+  ':',
+  ';',
+])
+
 let simkaiFontData: string | null = null
 
 export function formatCardDesc(raw: string): string {
@@ -42,9 +73,6 @@ export function formatCardDesc(raw: string): string {
     const code = chars[i].charCodeAt(0)
     if (code > 0x20 && code < 0x7f) {
       chars[i] = String.fromCharCode(code + 0xfee0)
-    }
-    if (code === 0x00b7) {
-      chars[i] = '・'
     }
   }
   let desc = chars.join('')
@@ -279,6 +307,40 @@ export async function generateImagePdf(
   }
 }
 
+export function layoutTextWithConstraints(
+  pdf: jsPDF,
+  rawText: string,
+  w: number,
+  h: number,
+): { lines: string[]; fontSize: number } {
+  const desc = formatCardDesc(rawText)
+  const maxWidthMm = w - TEXT_HORIZONTAL_PADDING_MM
+  let fontSize: number = DEFAULT_FONT_SIZE
+  for (;;) {
+    pdf.setFontSize(fontSize)
+    const fontSizeMm = fontSize * MM_PER_POINT
+    let lines = splitTextToLines(pdf, desc, maxWidthMm)
+    lines = applyListTailRule(pdf, lines, maxWidthMm)
+    lines = applyLeadingPunctuationRule(pdf, lines, maxWidthMm)
+    if (lines.length * fontSizeMm <= h) {
+      return { lines, fontSize }
+    }
+    fontSize -= 0.25
+    if (fontSize < MIN_FONT_SIZE) {
+      break
+    }
+  }
+  pdf.setFontSize(fontSize)
+  const fontSizeMm = fontSize * MM_PER_POINT
+  let lines = splitTextToLines(pdf, desc, maxWidthMm)
+  lines = applyListTailRule(pdf, lines, maxWidthMm)
+  lines = applyLeadingPunctuationRule(pdf, lines, maxWidthMm)
+  if (lines.length * fontSizeMm > h) {
+    return { lines, fontSize }
+  }
+  return { lines, fontSize }
+}
+
 function renderTextInRect(
   pdf: jsPDF,
   rawText: string,
@@ -287,26 +349,10 @@ function renderTextInRect(
   w: number,
   h: number,
 ): void {
-  const desc = formatCardDesc(rawText)
-  const maxWidthMm = w - TEXT_HORIZONTAL_PADDING_MM
-  let fontSize: number = DEFAULT_FONT_SIZE
-  for (;;) {
-    pdf.setFontSize(fontSize)
-    pdf.setFont('simkai', 'normal')
-    const fontSizeMm = fontSize * MM_PER_POINT
-    const lines = splitTextToLines(pdf, desc, maxWidthMm)
-    if (lines.length * fontSizeMm <= h) {
-      break
-    }
-    fontSize -= 0.25
-    if (fontSize < MIN_FONT_SIZE) {
-      break
-    }
-  }
-  pdf.setFontSize(fontSize)
   pdf.setFont('simkai', 'normal')
+  const { lines, fontSize } = layoutTextWithConstraints(pdf, rawText, w, h)
+  pdf.setFontSize(fontSize)
   const fontSizeMm = fontSize * MM_PER_POINT
-  const lines = splitTextToLines(pdf, desc, maxWidthMm)
   const textLeftX = x + TEXT_HORIZONTAL_PADDING_MM / 2
   const ascentMm = fontSize * MM_PER_POINT * ASCENT_RATIO
   let yy = y + ascentMm
@@ -343,22 +389,6 @@ function splitTextToLines(
 ): string[] {
   const lines: string[] = []
   const segments = text.split('\n')
-  const punctuation = new Set([
-    '，',
-    '。',
-    '．',
-    '、',
-    '！',
-    '？',
-    '：',
-    '；',
-    ',',
-    '.',
-    '!',
-    '?',
-    ':',
-    ';',
-  ])
   for (const seg of segments) {
     if (!seg.trim()) {
       lines.push('')
@@ -370,7 +400,7 @@ function splitTextToLines(
       const next = line + ch
       const w = pdf.getTextWidth(next)
       if (w > maxWidthMm && line.length > 0) {
-        if (punctuation.has(ch)) {
+        if (PUNCTUATION.has(ch)) {
           line = next
           lines.push(line)
           line = ''
@@ -385,6 +415,97 @@ function splitTextToLines(
     if (line) lines.push(line)
   }
   return lines
+}
+
+function applyListTailRule(
+  pdf: jsPDF,
+  lines: string[],
+  maxWidthMm: number,
+): string[] {
+  let result = [...lines]
+  let iterations = 0
+  const maxIterations = result.length * 2
+  while (iterations < maxIterations) {
+    iterations += 1
+    let changed = false
+    for (let i = 0; i < result.length; i += 1) {
+      const line = result[i]
+      const trimmed = line.replace(/\s+$/u, '')
+      if (!trimmed) continue
+      const len = trimmed.length
+      const lastChar = trimmed.charAt(len - 1)
+      let suffixStart = -1
+      if (LIST_BULLETS.has(lastChar)) {
+        suffixStart = len - 1
+      } else if (lastChar === ':' || lastChar === '：') {
+        const prev = trimmed.charAt(len - 2)
+        if (LIST_BULLETS.has(prev)) {
+          suffixStart = len - 2
+        }
+      }
+      if (suffixStart === -1) continue
+      const prefix = trimmed.slice(0, suffixStart).replace(/\s+$/u, '')
+      const suffix = trimmed.slice(suffixStart)
+      const restText = result.slice(i + 1).join('\n')
+      let tailText = suffix
+      if (restText) {
+        tailText += `\n${restText}`
+      }
+      const tailLines = splitTextToLines(pdf, tailText, maxWidthMm)
+      const next: string[] = []
+      for (let j = 0; j < i; j += 1) {
+        next.push(result[j])
+      }
+      if (prefix) {
+        next.push(prefix)
+      }
+      for (const tl of tailLines) {
+        next.push(tl)
+      }
+      result = next
+      changed = true
+      break
+    }
+    if (!changed) break
+  }
+  return result
+}
+
+function applyLeadingPunctuationRule(
+  pdf: jsPDF,
+  lines: string[],
+  maxWidthMm: number,
+): string[] {
+  let result = [...lines]
+  let iterations = 0
+  const maxIterations = result.length * 2
+  while (iterations < maxIterations) {
+    iterations += 1
+    let changed = false
+    for (let i = 1; i < result.length; i += 1) {
+      const line = result[i]
+      let idx = 0
+      while (idx < line.length && /\s/u.test(line.charAt(idx))) {
+        idx += 1
+      }
+      if (idx >= line.length) continue
+      const ch = line.charAt(idx)
+      if (LIST_BULLETS.has(ch)) {
+        continue
+      }
+      if (!PUNCTUATION.has(ch)) {
+        continue
+      }
+      const head = result.slice(0, i - 1)
+      const mergedText = result.slice(i - 1).join('\n')
+      const mergedLines = splitTextToLines(pdf, mergedText, maxWidthMm)
+      result = [...head, ...mergedLines]
+      changed = true
+      break
+    }
+    if (!changed) break
+  }
+  return result
 }
 
 function imageToDataUrl(img: HTMLImageElement | ImageBitmap): string | null {
