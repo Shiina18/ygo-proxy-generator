@@ -35,6 +35,18 @@ export function computeEffectAreaRect(
   return { x, y, w, h }
 }
 
+const NEAR_BLACK_MAX = 40
+const DEFAULT_BG = { r: 240, g: 230, b: 220 }
+
+function isEffectRectEdge(
+  px: number,
+  py: number,
+  rw: number,
+  rh: number,
+): boolean {
+  return px === 0 || px === rw - 1 || py === 0 || py === rh - 1
+}
+
 export async function sampleEffectBackgroundColor(
   img: HTMLImageElement | ImageBitmap,
   isMonster: boolean,
@@ -52,10 +64,24 @@ export async function sampleEffectBackgroundColor(
   ctx.drawImage(img as CanvasImageSource, 0, 0)
   const imageData = ctx.getImageData(rect.x, rect.y, rect.w, rect.h)
   const data = imageData.data
+  const rw = rect.w
+  const rh = rect.h
   const count: Record<string, number> = {}
-  for (let i = 0; i < data.length; i += 4) {
-    const key = `${data[i]},${data[i + 1]},${data[i + 2]}`
-    count[key] = (count[key] ?? 0) + 1
+  for (let py = 0; py < rh; py += 1) {
+    for (let px = 0; px < rw; px += 1) {
+      if (!isEffectRectEdge(px, py, rw, rh)) {
+        continue
+      }
+      const i = (py * rw + px) * 4
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      if (Math.max(r, g, b) < NEAR_BLACK_MAX) {
+        continue
+      }
+      const key = `${r},${g},${b}`
+      count[key] = (count[key] ?? 0) + 1
+    }
   }
   let maxKey = ''
   let maxCount = 0
@@ -64,6 +90,9 @@ export async function sampleEffectBackgroundColor(
       maxCount = n
       maxKey = key
     }
+  }
+  if (!maxKey) {
+    return DEFAULT_BG
   }
   const [r, g, b] = maxKey.split(',').map(Number)
   return { r, g, b }

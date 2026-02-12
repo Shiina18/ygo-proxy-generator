@@ -73,6 +73,11 @@ export interface GeneratePdfOptions {
   spacingMm?: number
 }
 
+export interface GeneratePdfResult {
+  buffer: ArrayBuffer
+  errors: Array<{ cardId: number; message: string }>
+}
+
 function getSimkaiFontUrl(): string {
   const base =
     typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
@@ -98,7 +103,7 @@ async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
 
 export async function generateImagePdf(
   options: GeneratePdfOptions,
-): Promise<ArrayBuffer> {
+): Promise<GeneratePdfResult> {
   const {
     cardIds,
     fetchImage,
@@ -116,40 +121,61 @@ export async function generateImagePdf(
   }
   const positions = computeCardPositions(cardIds.length, spacingMm)
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+  if (overlayEffects) {
+    await ensureSimkaiFont(pdf)
+  }
 
   type PreparedCard = {
     cardId: number
-    img: HTMLImageElement | ImageBitmap
+    img: HTMLImageElement | ImageBitmap | null
     cardText?: CardText
     bgColor?: { r: number; g: number; b: number }
   }
 
+  const errors: Array<{ cardId: number; message: string }> = []
   const total = cardIds.length
   let done = 0
 
   const tasks = cardIds.map((id) => {
     return async (): Promise<PreparedCard> => {
-      const img = await fetchImage(id)
+      const addError = (message: string) => {
+        errors.push({ cardId: id, message })
+      }
+
+      let img: HTMLImageElement | ImageBitmap | null = null
       let cardText: CardText | undefined
       let bgColor: { r: number; g: number; b: number } | undefined
 
+      const imgResult = await fetchImage(id).catch((e) => {
+        addError(e instanceof Error ? e.message : String(e))
+        return null
+      })
+      if (!imgResult) {
+        done += 1
+        if (onProgress) {
+          onProgress({ done, total, phase: 'fetch' })
+        }
+        return { cardId: id, img: null, cardText, bgColor }
+      }
+      img = imgResult
+
       if (overlayEffects && fetchCardText && sampleBgColor) {
-        const text = await fetchCardText(id)
-        const monster = isMonster(text.types)
-        const bg = await sampleBgColor(img, monster)
-        cardText = text
-        bgColor = bg
+        const text = await fetchCardText(id).catch((e) => {
+          addError(e instanceof Error ? e.message : String(e))
+          return null
+        })
+        if (text) {
+          const monster = isMonster(text.types)
+          const bg = await sampleBgColor(img, monster)
+          cardText = text
+          bgColor = bg
+        }
       }
 
       done += 1
       if (onProgress) {
-        onProgress({
-          done,
-          total,
-          phase: 'fetch',
-        })
+        onProgress({ done, total, phase: 'fetch' })
       }
-
       return { cardId: id, img, cardText, bgColor }
     }
   })
@@ -170,16 +196,28 @@ export async function generateImagePdf(
     }
     const item = prepared[i]
     const { img, cardText, bgColor } = item
-    const dataUrl = imageToDataUrl(img)
-    if (dataUrl) {
-      pdf.addImage(dataUrl, 'JPEG', pos.x, pos.y, CARD_WIDTH_MM, CARD_HEIGHT_MM)
+    if (img) {
+      const dataUrl = imageToDataUrl(img)
+      if (dataUrl) {
+        pdf.addImage(
+          dataUrl,
+          'JPEG',
+          pos.x,
+          pos.y,
+          CARD_WIDTH_MM,
+          CARD_HEIGHT_MM,
+        )
+      }
+    } else {
+      pdf.setFillColor(255, 255, 255)
+      pdf.rect(pos.x, pos.y, CARD_WIDTH_MM, CARD_HEIGHT_MM, 'F')
     }
 
     if (
       overlayEffects &&
       fetchCardText &&
       sampleBgColor &&
-      dataUrl &&
+      img &&
       cardText &&
       bgColor
     ) {
@@ -232,9 +270,13 @@ export async function generateImagePdf(
   if (import.meta.env.DEV) {
     console.log('generatePdf 完成', {
       cardCount: cardIds.length,
+      errorCount: errors.length,
     })
   }
-  return pdf.output('arraybuffer')
+  return {
+    buffer: pdf.output('arraybuffer'),
+    errors,
+  }
 }
 
 function renderTextInRect(

@@ -2,7 +2,9 @@ import { parseYdk, sectionDeckToCardIds } from './ydk/parseYdk'
 import { generateImagePdf } from './pdf/generatePdf'
 import { DEFAULT_SPACING_MM, computeMaxSpacingMm } from './pdf/layout'
 import { cachedFetchCardImage, cachedFetchCardText } from './api/cardCache'
+import { fetchIdChangelog } from './api/idChangelog'
 import type { CardLanguage } from './api/imageApi'
+import { normalizeCardIds } from './utils/normalizeCardId'
 import { sampleEffectBackgroundColor } from './canvas/effectArea'
 import appHtml from './app.html?raw'
 import './style.css'
@@ -42,6 +44,7 @@ export function setupApp(root: HTMLDivElement) {
     root,
   )
   const messageEl = getRequiredElement<HTMLParagraphElement>('#message', root)
+  const errorsEl = getRequiredElement<HTMLDivElement>('#errors', root)
   const spacingInput = getRequiredElement<HTMLInputElement>(
     '#card-spacing',
     root,
@@ -54,6 +57,15 @@ export function setupApp(root: HTMLDivElement) {
     'input[name="card-language"]',
   )
   const overlayTip = getRequiredElement<HTMLSpanElement>('#overlay-tip', root)
+  const pdfPreviewEl = getRequiredElement<HTMLDivElement>('#pdf-preview', root)
+  const pdfIframe = getRequiredElement<HTMLIFrameElement>('#pdf-iframe', root)
+  const pdfDownloadLink = getRequiredElement<HTMLButtonElement>(
+    '#pdf-download',
+    root,
+  )
+
+  let currentPdfUrl: string | null = null
+  let currentPdfName: string | null = null
 
   const maxSpacingMm = computeMaxSpacingMm()
   spacingInput.max = String(maxSpacingMm)
@@ -69,6 +81,28 @@ export function setupApp(root: HTMLDivElement) {
 
   function setMessage(text: string) {
     messageEl.textContent = text
+  }
+
+  function setErrors(errors: Array<{ cardId: number; message: string }>) {
+    errorsEl.hidden = false
+    errorsEl.innerHTML = ''
+    const title = document.createElement('p')
+    title.className = 'errors-title'
+    title.textContent = `以下 ${errors.length} 张卡加载失败，PDF 中已留空：`
+    errorsEl.appendChild(title)
+    const list = document.createElement('ul')
+    list.className = 'errors-list'
+    for (const { cardId, message } of errors) {
+      const li = document.createElement('li')
+      li.textContent = `卡号 ${cardId}: ${message}`
+      list.appendChild(li)
+    }
+    errorsEl.appendChild(list)
+  }
+
+  function clearErrors() {
+    errorsEl.hidden = true
+    errorsEl.innerHTML = ''
   }
 
   function setGenerating(on: boolean) {
@@ -174,12 +208,14 @@ export function setupApp(root: HTMLDivElement) {
       setGenerating(false)
       return
     }
+    const idChangelog = await fetchIdChangelog()
+    const normalizedIds = normalizeCardIds(cardIds, idChangelog)
     const lang = currentLanguage
     const overlayEffects = overlayCheckbox.checked && lang === 'zh'
     if (import.meta.env.DEV) {
       console.log('生成 PDF', {
-        cardCount: cardIds.length,
-        first5CardIds: cardIds.slice(0, 5),
+        cardCount: normalizedIds.length,
+        first5CardIds: normalizedIds.slice(0, 5),
         overlayEffects,
         spacingMm,
         lang,
@@ -187,9 +223,10 @@ export function setupApp(root: HTMLDivElement) {
     }
     const fetchImage = (id: number) => cachedFetchCardImage(id, lang)
     let buffer: ArrayBuffer
+    let errors: Array<{ cardId: number; message: string }> = []
     try {
-      buffer = await generateImagePdf({
-        cardIds,
+      const result = await generateImagePdf({
+        cardIds: normalizedIds,
         fetchImage,
         overlayEffects,
         fetchCardText: overlayEffects ? cachedFetchCardText : undefined,
@@ -204,6 +241,8 @@ export function setupApp(root: HTMLDivElement) {
           )
         },
       })
+      buffer = result.buffer
+      errors = result.errors
     } catch (e) {
       if (import.meta.env.DEV) {
         console.error('generateImagePdf 失败', e)
@@ -211,6 +250,11 @@ export function setupApp(root: HTMLDivElement) {
       setMessage(String(e instanceof Error ? e.message : e))
       setGenerating(false)
       return
+    }
+    if (errors.length > 0) {
+      setErrors(errors)
+    } else {
+      clearErrors()
     }
     const stem = lastFileName ? lastFileName.replace(/\.ydk$/i, '') : 'proxy'
     const now = new Date()
@@ -226,15 +270,29 @@ export function setupApp(root: HTMLDivElement) {
       String(now.getSeconds()).padStart(2, '0')
     const pdfName = `${stem}-${lang}-${ts}.pdf`
 
+    if (currentPdfUrl) {
+      URL.revokeObjectURL(currentPdfUrl)
+      currentPdfUrl = null
+    }
     const blob = new Blob([buffer], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = pdfName
-    a.click()
-    URL.revokeObjectURL(url)
-    setMessage('已下载 PDF')
+    currentPdfUrl = url
+    currentPdfName = pdfName
+    pdfIframe.src = url
+    pdfPreviewEl.hidden = false
+    setMessage(`已生成 PDF (${pdfName})，可在此预览或点击下方下载`)
     setGenerating(false)
+  })
+
+  pdfDownloadLink.addEventListener('click', (e) => {
+    e.preventDefault()
+    if (!currentPdfUrl || !currentPdfName) return
+    const a = document.createElement('a')
+    a.href = currentPdfUrl
+    a.download = currentPdfName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   })
 }
 

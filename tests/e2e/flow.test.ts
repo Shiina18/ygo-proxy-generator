@@ -29,7 +29,7 @@ describe('e2e: YDK → PDF (real network)', () => {
 
   it('generates image-only PDF from YDK', async () => {
     const fetchImage = (id: number) => fetchImageFromNetwork(id)
-    const buffer = await generateImagePdf({
+    const { buffer } = await generateImagePdf({
       cardIds,
       fetchImage,
     })
@@ -40,7 +40,7 @@ describe('e2e: YDK → PDF (real network)', () => {
   it('generates PDF with overlay effects from YDK', async () => {
     const overlayCardIds = cardIds.slice(0, 3)
     const fetchImage = (id: number) => fetchImageFromNetwork(id)
-    const buffer = await generateImagePdf({
+    const { buffer } = await generateImagePdf({
       cardIds: overlayCardIds,
       fetchImage,
       overlayEffects: true,

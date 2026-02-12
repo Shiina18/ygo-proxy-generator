@@ -1,0 +1,38 @@
+name: Update idChangelog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch idChangelog
+        run: |
+          curl -sL 'https://ygocdb.com/api/v0/idChangelog.jsonp' -o public/idChangelog.json
+
+      - name: Prettify idChangelog
+        run: |
+          jq '.' public/idChangelog.json > public/idChangelog.json.tmp
+          mv public/idChangelog.json.tmp public/idChangelog.json
+
+      - name: Commit
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add public/idChangelog.json
+          git diff --staged --quiet || git commit -m "chore: update idChangelog"
+
+      - name: Push
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
