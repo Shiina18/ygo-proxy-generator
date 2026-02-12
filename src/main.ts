@@ -57,15 +57,15 @@ export function setupApp(root: HTMLDivElement) {
     'input[name="card-language"]',
   )
   const overlayTip = getRequiredElement<HTMLSpanElement>('#overlay-tip', root)
-  const pdfPreviewEl = getRequiredElement<HTMLDivElement>('#pdf-preview', root)
-  const pdfIframe = getRequiredElement<HTMLIFrameElement>('#pdf-iframe', root)
-  const pdfDownloadLink = getRequiredElement<HTMLButtonElement>(
-    '#pdf-download',
+  const pdfShareAreaEl = getRequiredElement<HTMLDivElement>(
+    '#pdf-share-area',
     root,
   )
+  const pdfShareBtn = getRequiredElement<HTMLButtonElement>('#pdf-share', root)
 
   let currentPdfUrl: string | null = null
   let currentPdfName: string | null = null
+  let currentPdfFile: File | null = null
 
   const maxSpacingMm = computeMaxSpacingMm()
   spacingInput.max = String(maxSpacingMm)
@@ -276,23 +276,54 @@ export function setupApp(root: HTMLDivElement) {
     }
     const blob = new Blob([buffer], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
+    const file = new File([blob], pdfName, { type: 'application/pdf' })
     currentPdfUrl = url
     currentPdfName = pdfName
-    pdfIframe.src = url
-    pdfPreviewEl.hidden = false
-    setMessage(`已生成 PDF (${pdfName})，可在此预览或点击下方下载`)
+    currentPdfFile = file
+    const canShareFiles =
+      typeof navigator !== 'undefined' &&
+      navigator.canShare?.({ files: [file] })
+    const ua =
+      typeof navigator !== 'undefined'
+        ? navigator.userAgent || navigator.vendor || (window as any).opera
+        : ''
+    const isMobileDevice = /android|iphone|ipad|ipod/i.test(ua)
+    pdfShareBtn.hidden = !canShareFiles
+    pdfShareAreaEl.hidden = !(isMobileDevice && canShareFiles)
+    setMessage(
+      isMobileDevice
+        ? canShareFiles
+          ? `已生成 PDF (${pdfName})，请点击分享保存或转发`
+          : `已生成 PDF (${pdfName})，请用电脑打开本页下载`
+        : `已生成 PDF (${pdfName})，已自动开始下载`,
+    )
+    if (!isMobileDevice && currentPdfUrl && currentPdfName) {
+      const a = document.createElement('a')
+      a.href = currentPdfUrl
+      a.download = currentPdfName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
     setGenerating(false)
   })
 
-  pdfDownloadLink.addEventListener('click', (e) => {
-    e.preventDefault()
-    if (!currentPdfUrl || !currentPdfName) return
-    const a = document.createElement('a')
-    a.href = currentPdfUrl
-    a.download = currentPdfName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+  pdfShareBtn.addEventListener('click', async () => {
+    if (!currentPdfFile || !currentPdfName) return
+    const nav = navigator as Navigator & {
+      share?: (data: { files: File[]; title?: string }) => Promise<void>
+    }
+    if (!nav.share) return
+    try {
+      await nav.share({
+        files: [currentPdfFile],
+        title: currentPdfName,
+      })
+      setMessage('已分享')
+    } catch (err) {
+      const name = err instanceof Error ? err.name : ''
+      setMessage(name === 'AbortError' ? '已取消分享' : '分享失败')
+    }
   })
 }
 
