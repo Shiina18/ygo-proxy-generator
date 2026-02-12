@@ -34,7 +34,7 @@ const DEFAULT_MIN_DELAY_MS = 100
 // jsPDF 的 text() 用 baseline 定位，首行顶需对齐效果框顶：偏移 = ascent ≈ fontSize×此估计值（常见字体约 0.8）
 const ASCENT_RATIO = 0.8
 
-let simkaiLoaded = false
+let simkaiFontData: string | null = null
 
 export function formatCardDesc(raw: string): string {
   const chars = Array.from(raw)
@@ -87,18 +87,18 @@ function getSimkaiFontUrl(): string {
 }
 
 async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
-  if (simkaiLoaded) return
-  const path = getSimkaiFontUrl()
-  const url = new URL(path, window.location.href).href
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
+  if (!simkaiFontData) {
+    const path = getSimkaiFontUrl()
+    const url = new URL(path, window.location.href).href
+    const res = await fetch(url)
+    if (!res.ok) {
+      throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
+    }
+    const buf = await res.arrayBuffer()
+    simkaiFontData = arrayBufferToBase64(buf)
   }
-  const buf = await res.arrayBuffer()
-  const data = arrayBufferToBase64(buf)
-  pdf.addFileToVFS('simkai.ttf', data)
+  pdf.addFileToVFS('simkai.ttf', simkaiFontData)
   pdf.addFont('simkai.ttf', 'simkai', 'normal')
-  simkaiLoaded = true
 }
 
 export async function generateImagePdf(
