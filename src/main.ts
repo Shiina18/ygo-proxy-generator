@@ -280,21 +280,16 @@ export function setupApp(root: HTMLDivElement) {
     currentPdfUrl = url
     currentPdfName = pdfName
     currentPdfFile = file
-    const canShareFiles =
-      typeof navigator !== 'undefined' &&
-      navigator.canShare?.({ files: [file] })
     const ua =
       typeof navigator !== 'undefined'
         ? navigator.userAgent || navigator.vendor || (window as any).opera
         : ''
     const isMobileDevice = /android|iphone|ipad|ipod/i.test(ua)
-    pdfShareBtn.hidden = !canShareFiles
-    pdfShareAreaEl.hidden = !(isMobileDevice && canShareFiles)
+    pdfShareAreaEl.hidden = !isMobileDevice
+    pdfShareBtn.hidden = false
     setMessage(
       isMobileDevice
-        ? canShareFiles
-          ? `已生成 PDF (${pdfName})，请点击分享保存或转发`
-          : `已生成 PDF (${pdfName})，请用电脑打开本页下载`
+        ? `已生成 PDF (${pdfName})，请点击分享保存或转发`
         : `已生成 PDF (${pdfName})，已自动开始下载`,
     )
     if (!isMobileDevice && currentPdfUrl && currentPdfName) {
@@ -313,7 +308,10 @@ export function setupApp(root: HTMLDivElement) {
     const nav = navigator as Navigator & {
       share?: (data: { files: File[]; title?: string }) => Promise<void>
     }
-    if (!nav.share) return
+    if (!nav.share) {
+      setMessage('当前浏览器不支持分享，请用电脑打开本页下载')
+      return
+    }
     try {
       await nav.share({
         files: [currentPdfFile],
