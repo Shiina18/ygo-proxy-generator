@@ -325,7 +325,7 @@ export function layoutTextWithConstraints(
     if (lines.length * fontSizeMm <= h) {
       return { lines, fontSize }
     }
-    fontSize -= 0.25
+    fontSize -= 0.05
     if (fontSize < MIN_FONT_SIZE) {
       break
     }
@@ -446,10 +446,10 @@ function applyListTailRule(
       if (suffixStart === -1) continue
       const prefix = trimmed.slice(0, suffixStart).replace(/\s+$/u, '')
       const suffix = trimmed.slice(suffixStart)
-      const restText = result.slice(i + 1).join('\n')
+      const restText = result.slice(i + 1).join('')
       let tailText = suffix
       if (restText) {
-        tailText += `\n${restText}`
+        tailText += restText
       }
       const tailLines = splitTextToLines(pdf, tailText, maxWidthMm)
       const next: string[] = []
@@ -497,7 +497,7 @@ function applyLeadingPunctuationRule(
         continue
       }
       const head = result.slice(0, i - 1)
-      const mergedText = result.slice(i - 1).join('\n')
+      const mergedText = result.slice(i - 1).join('')
       const mergedLines = splitTextToLines(pdf, mergedText, maxWidthMm)
       result = [...head, ...mergedLines]
       changed = true

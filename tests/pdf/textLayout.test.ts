@@ -161,7 +161,7 @@ describe('text layout constraints', () => {
     )
   })
 
-  it.skip('prints final lines for 99267150 and 71564252 (debug)', () => {
+  it.skip('prints final lines for debug cards (99267150, 71564252, 76666602)', () => {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
     pdf.setFont('helvetica', 'normal')
 
@@ -190,7 +190,41 @@ describe('text layout constraints', () => {
     // eslint-disable-next-line no-console
     console.log('71564252 lines:', layout71564252.lines)
 
+    const raw76666602 =
+      '「阿不思的落胤」＋光·暗属性怪兽＋效果怪兽\r\n这个卡名的①③的效果1回合各能使用1次。\r\n①：这张卡特殊召唤的场合才能发动。自己·对方的墓地·除外状态的卡合计最多2张回到卡组。\r\n②：只要自己或对方的场上或墓地有「艾克莉西娅」怪兽存在，这张卡攻击力上升500，不受这张卡以外的效果影响。\r\n③：这张卡被送去墓地的回合的结束阶段才能发动。从卡组把1张「教导」、「铁兽」卡加入手卡。'
+    const desc76666602 = formatCardDesc(raw76666602)
+    const layout76666602 = layoutTextWithConstraints(
+      pdf,
+      desc76666602,
+      MONSTER_BOX_WIDTH_MM,
+      MONSTER_BOX_HEIGHT_MM,
+    )
+
+    // eslint-disable-next-line no-console
+    console.log('76666602 lines:', layout76666602.lines)
+
     expect(layout99267150.lines.length).toBeGreaterThan(0)
     expect(layout71564252.lines.length).toBeGreaterThan(0)
+    expect(layout76666602.lines.length).toBeGreaterThan(0)
+  })
+
+  it('76666602: no spurious line break inside 攻击力上升 (reflow must not preserve previous breaks)', () => {
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+    pdf.setFont('helvetica', 'normal')
+
+    const raw76666602 =
+      '「阿不思的落胤」＋光·暗属性怪兽＋效果怪兽\r\n这个卡名的①③的效果1回合各能使用1次。\r\n①：这张卡特殊召唤的场合才能发动。自己·对方的墓地·除外状态的卡合计最多2张回到卡组。\r\n②：只要自己或对方的场上或墓地有「艾克莉西娅」怪兽存在，这张卡攻击力上升500，不受这张卡以外的效果影响。\r\n③：这张卡被送去墓地的回合的结束阶段才能发动。从卡组把1张「教导」、「铁兽」卡加入手卡。'
+    const desc76666602 = formatCardDesc(raw76666602)
+    const { lines } = layoutTextWithConstraints(
+      pdf,
+      desc76666602,
+      MONSTER_BOX_WIDTH_MM,
+      MONSTER_BOX_HEIGHT_MM,
+    )
+
+    assertLinesWidth(pdf, lines, MONSTER_BOX_WIDTH_MM)
+    assertBulletAndPunctuationRules(lines)
+    // 重排时后续行用 join('') 合并再按宽度折行，不应把上一轮的折行当硬换行保留，导致 "击力" 单独一行
+    expect(lines).not.toContain('击力')
   })
 })
