@@ -98,6 +98,7 @@ export interface GeneratePdfOptions {
     phase: 'fetch' | 'render' | 'all' | 'font'
     cardId?: number
     error?: string
+    success?: boolean
   }) => void
   spacingMm?: number
 }
@@ -115,7 +116,10 @@ function getSimkaiFontUrl(): string {
   return base + (base.endsWith('/') ? '' : '/') + 'simkai.ttf'
 }
 
-const FONT_LOAD_TIMEOUT_MS = 7000
+/** 连接建立超时（拿到响应头为止） */
+const FONT_CONNECTION_TIMEOUT_MS = 7000
+/** 读 body 超时（大文件下载可较慢） */
+const FONT_READ_BODY_TIMEOUT_MS = 60000
 
 async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
   if (!simkaiFontData) {
@@ -125,30 +129,44 @@ async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
       typeof AbortController !== 'undefined'
         ? new AbortController()
         : undefined
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    let connTimeoutId: ReturnType<typeof setTimeout> | undefined
+    let readTimeoutId: ReturnType<typeof setTimeout> | undefined
 
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
+    const connTimeoutPromise = new Promise<never>((_, reject) => {
+      connTimeoutId = setTimeout(
         () => {
           controller?.abort()
-          reject(new Error('simkai.ttf 加载超时'))
+          reject(new Error('simkai.ttf 连接超时'))
         },
-        FONT_LOAD_TIMEOUT_MS,
+        FONT_CONNECTION_TIMEOUT_MS,
       )
     })
 
-    const fetchPromise = (async () => {
-      const res = await fetch(url, { signal: controller?.signal })
-      if (!res.ok) {
-        throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
-      }
-      const buf = await res.arrayBuffer()
-      return arrayBufferToBase64(buf)
-    })()
+    const res = await Promise.race([
+      connTimeoutPromise,
+      fetch(url, { signal: controller?.signal }),
+    ])
+    if (connTimeoutId !== undefined) clearTimeout(connTimeoutId)
+    if (!res.ok) {
+      throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
+    }
 
-    const result = await Promise.race([timeoutPromise, fetchPromise])
-    if (timeoutId !== undefined) clearTimeout(timeoutId)
-    simkaiFontData = result
+    const readTimeoutPromise = new Promise<never>((_, reject) => {
+      readTimeoutId = setTimeout(
+        () => {
+          controller?.abort()
+          reject(new Error('simkai.ttf 下载超时'))
+        },
+        FONT_READ_BODY_TIMEOUT_MS,
+      )
+    })
+
+    const buf = await Promise.race([
+      readTimeoutPromise,
+      res.arrayBuffer(),
+    ])
+    if (readTimeoutId !== undefined) clearTimeout(readTimeoutId)
+    simkaiFontData = arrayBufferToBase64(buf)
   }
   pdf.addFileToVFS('simkai.ttf', simkaiFontData)
   pdf.addFont('simkai.ttf', 'simkai', 'normal')
@@ -197,7 +215,7 @@ export async function generateImagePdf(
       }
     }
     if (overlay && onProgress) {
-      onProgress({ done: 1, total: 1, phase: 'font' })
+      onProgress({ done: 1, total: 1, phase: 'font', success: true })
     }
   }
 

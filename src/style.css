@@ -142,6 +142,11 @@
   font-size: 0.8rem;
   color: #b91c1c;
 }
+.font-success {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #059669;
+}
 
 .desktop-only-warning {
   margin-top: 0.25rem;
