@@ -57,6 +57,8 @@ export function setupApp(root: HTMLDivElement) {
     'input[name="card-language"]',
   )
   const overlayTip = getRequiredElement<HTMLSpanElement>('#overlay-tip', root)
+  const fontWarningEl =
+    root.querySelector<HTMLParagraphElement>('#font-warning')
 
   let currentPdfUrl: string | null = null
 
@@ -225,7 +227,18 @@ export function setupApp(root: HTMLDivElement) {
         fetchCardText: overlayEffects ? cachedFetchCardText : undefined,
         sampleBgColor: overlayEffects ? sampleEffectBackgroundColor : undefined,
         spacingMm,
-        onProgress: ({ done, total }) => {
+        onProgress: ({ done, total, phase, error }) => {
+          if (phase === 'font') {
+            if (error && fontWarningEl) {
+              fontWarningEl.hidden = false
+              fontWarningEl.textContent =
+                '效果文本字体加载失败，本次不会覆盖效果文本。'
+            } else if (!error) {
+              // 字体加载中 / 完成，仅在信息区给出提示
+              setMessage('正在加载覆盖效果所需字体…')
+            }
+            return
+          }
           const percent = total > 0 ? Math.round((done / total) * 100) : 0
           setMessage(
             overlayEffects

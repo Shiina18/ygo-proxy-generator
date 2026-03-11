@@ -95,8 +95,9 @@ export interface GeneratePdfOptions {
   onProgress?: (info: {
     done: number
     total: number
-    phase: 'fetch' | 'render' | 'all'
+    phase: 'fetch' | 'render' | 'all' | 'font'
     cardId?: number
+    error?: string
   }) => void
   spacingMm?: number
 }
@@ -118,7 +119,25 @@ async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
   if (!simkaiFontData) {
     const path = getSimkaiFontUrl()
     const url = new URL(path, window.location.href).href
-    const res = await fetch(url)
+    const controller =
+      typeof AbortController !== 'undefined'
+        ? (new AbortController() as AbortController)
+        : undefined
+    const timeoutId =
+      controller != null
+        ? (setTimeout(() => controller.abort(), 7000) as unknown as number)
+        : undefined
+
+    let res: Response
+    try {
+      res = await fetch(url, {
+        signal: controller?.signal as AbortSignal | undefined,
+      })
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
+    }
     if (!res.ok) {
       throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
     }
@@ -149,8 +168,31 @@ export async function generateImagePdf(
   }
   const positions = computeCardPositions(cardIds.length, spacingMm)
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-  if (overlayEffects) {
-    await ensureSimkaiFont(pdf)
+
+  let overlay = overlayEffects
+  if (overlay) {
+    if (onProgress) {
+      onProgress({ done: 0, total: 1, phase: 'font' })
+    }
+    try {
+      await ensureSimkaiFont(pdf)
+    } catch (e) {
+      overlay = false
+      if (import.meta.env.DEV) {
+        console.error('simkai.ttf 加载失败，已禁用覆盖效果文本', e)
+      }
+      if (onProgress) {
+        onProgress({
+          done: 1,
+          total: 1,
+          phase: 'font',
+          error: 'simkai.ttf 加载失败',
+        })
+      }
+    }
+    if (overlay && onProgress) {
+      onProgress({ done: 1, total: 1, phase: 'font' })
+    }
   }
 
   type PreparedCard = {
@@ -187,7 +229,7 @@ export async function generateImagePdf(
       }
       img = imgResult
 
-      if (overlayEffects && fetchCardText && sampleBgColor) {
+      if (overlay && fetchCardText && sampleBgColor) {
         const text = await fetchCardText(id).catch((e) => {
           addError(e instanceof Error ? e.message : String(e))
           return null
@@ -241,14 +283,7 @@ export async function generateImagePdf(
       pdf.rect(pos.x, pos.y, CARD_WIDTH_MM, CARD_HEIGHT_MM, 'F')
     }
 
-    if (
-      overlayEffects &&
-      fetchCardText &&
-      sampleBgColor &&
-      img &&
-      cardText &&
-      bgColor
-    ) {
+    if (overlay && fetchCardText && sampleBgColor && img && cardText && bgColor) {
       await ensureSimkaiFont(pdf)
       const pendulum = isPendulum(cardText.types)
       const monster = isMonster(cardText.types)

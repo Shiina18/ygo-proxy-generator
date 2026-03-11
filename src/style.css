@@ -137,6 +137,12 @@
   margin-top: 0.25rem;
 }
 
+.font-warning {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
 .desktop-only-warning {
   margin-top: 0.25rem;
   font-size: 0.78rem;
