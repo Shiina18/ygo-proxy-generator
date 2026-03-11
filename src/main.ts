@@ -80,7 +80,7 @@ export function setupApp(root: HTMLDivElement) {
     messageEl.textContent = text
   }
 
-  function setErrors(errors: Array<{ cardId: number; message: string }>) {
+  function setErrors(errors: Array<{ cardId: string; message: string }>) {
     errorsEl.hidden = false
     errorsEl.innerHTML = ''
     const title = document.createElement('p')
@@ -218,9 +218,9 @@ export function setupApp(root: HTMLDivElement) {
         lang,
       })
     }
-    const fetchImage = (id: number) => cachedFetchCardImage(id, lang)
+    const fetchImage = (id: string) => cachedFetchCardImage(id, lang)
     let buffer: ArrayBuffer
-    let errors: Array<{ cardId: number; message: string }> = []
+    let errors: Array<{ cardId: string; message: string }> = []
     try {
       const result = await generateImagePdf({
         cardIds: normalizedIds,

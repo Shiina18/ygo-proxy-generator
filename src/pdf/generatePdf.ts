@@ -84,10 +84,10 @@ export function formatCardDesc(raw: string): string {
 }
 
 export interface GeneratePdfOptions {
-  cardIds: number[]
-  fetchImage: (id: number) => Promise<HTMLImageElement | ImageBitmap>
+  cardIds: string[]
+  fetchImage: (id: string) => Promise<HTMLImageElement | ImageBitmap>
   overlayEffects?: boolean
-  fetchCardText?: (id: number) => Promise<CardText>
+  fetchCardText?: (id: string) => Promise<CardText>
   sampleBgColor?: (
     img: HTMLImageElement | ImageBitmap,
     isMonster: boolean,
@@ -96,7 +96,7 @@ export interface GeneratePdfOptions {
     done: number
     total: number
     phase: 'fetch' | 'render' | 'all' | 'font'
-    cardId?: number
+    cardId?: string
     error?: string
     success?: boolean
   }) => void
@@ -105,7 +105,7 @@ export interface GeneratePdfOptions {
 
 export interface GeneratePdfResult {
   buffer: ArrayBuffer
-  errors: Array<{ cardId: number; message: string }>
+  errors: Array<{ cardId: string; message: string }>
 }
 
 function getSimkaiFontUrl(): string {
@@ -239,13 +239,13 @@ export async function generateImagePdf(
   }
 
   type PreparedCard = {
-    cardId: number
+    cardId: string
     img: HTMLImageElement | ImageBitmap | null
     cardText?: CardText
     bgColor?: { r: number; g: number; b: number }
   }
 
-  const errors: Array<{ cardId: number; message: string }> = []
+  const errors: Array<{ cardId: string; message: string }> = []
   const total = cardIds.length
   let done = 0
 

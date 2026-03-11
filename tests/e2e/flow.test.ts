@@ -7,7 +7,7 @@ import { arrayBufferToBase64 } from '../../src/utils/base64'
 import ydkText from '../fixtures/sample.ydk?raw'
 
 async function fetchImageFromNetwork(
-  cardId: number,
+  cardId: string,
 ): Promise<HTMLImageElement> {
   const url = getRawCardImageUrl(cardId, 'zh')
   const res = await fetch(url)
@@ -27,7 +27,7 @@ describe('e2e: YDK → PDF (real network)', () => {
   const cardIds = sectionDeckToCardIds(deck)
 
   it('generates image-only PDF from YDK', async () => {
-    const fetchImage = (id: number) => fetchImageFromNetwork(id)
+    const fetchImage = (id: string) => fetchImageFromNetwork(id)
     const { buffer } = await generateImagePdf({
       cardIds,
       fetchImage,

@@ -1,14 +1,14 @@
 export interface SectionDeck {
-  main: number[]
-  extra: number[]
-  side: number[]
+  main: string[]
+  extra: string[]
+  side: string[]
 }
 
 const SECTION_MAIN = '#main'
 const SECTION_EXTRA = '#extra'
 const SECTION_SIDE = '!side'
 
-// 将原始 YDK 文本解析为主卡组 / 额外 / 副卡组。
+/** 将原始 YDK 解析为主/额外/副卡组。卡号以字符串保留，前导零（如 "03739500"）不丢失。 */
 export function parseYdk(text: string, filename?: string): SectionDeck {
   if (filename && !filename.toLowerCase().endsWith('.ydk')) {
     throw new Error('文件扩展名必须为 .ydk')
@@ -19,10 +19,10 @@ export function parseYdk(text: string, filename?: string): SectionDeck {
     throw new Error('YDK 内容不得超过 120 行')
   }
 
-  const main: number[] = []
-  const extra: number[] = []
-  const side: number[] = []
-  let current: number[] | null = null
+  const main: string[] = []
+  const extra: string[] = []
+  const side: string[] = []
+  let current: string[] | null = null
 
   for (const line of lines) {
     const trimmed = line.trim()
@@ -40,15 +40,13 @@ export function parseYdk(text: string, filename?: string): SectionDeck {
       continue
     }
     if (current === null) continue
-    const num = Number(trimmed)
-    if (Number.isInteger(num) && String(num) === trimmed) {
-      current.push(num)
-    }
+    if (!/^\d+$/.test(trimmed)) continue
+    current.push(trimmed)
   }
   return { main, extra, side }
 }
 
-// 将主卡组 / 额外 / 副卡组合并成一张卡号列表，保持顺序与重复。
-export function sectionDeckToCardIds(deck: SectionDeck): number[] {
+/** 将主/额外/副卡组合并成卡号列表（字符串），保持顺序与重复。 */
+export function sectionDeckToCardIds(deck: SectionDeck): string[] {
   return [...deck.main, ...deck.extra, ...deck.side]
 }

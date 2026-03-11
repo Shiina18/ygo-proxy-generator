@@ -5,7 +5,7 @@ import { fetchCardText } from './cardApi'
 const MAX_CACHE_SIZE = 100
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>()
-const textCache = new Map<number, Promise<CardText>>()
+const textCache = new Map<string, Promise<CardText>>()
 
 function ensureCacheCapacity<K, V>(cache: Map<K, V>) {
   if (cache.size >= MAX_CACHE_SIZE) {
@@ -17,7 +17,7 @@ function ensureCacheCapacity<K, V>(cache: Map<K, V>) {
 }
 
 export function cachedFetchCardImage(
-  cardId: number,
+  cardId: string,
   lang: CardLanguage,
 ): Promise<HTMLImageElement> {
   const key = `${lang}:${cardId}`
@@ -31,7 +31,7 @@ export function cachedFetchCardImage(
   return p
 }
 
-export function cachedFetchCardText(cardId: number): Promise<CardText> {
+export function cachedFetchCardText(cardId: string): Promise<CardText> {
   const cached = textCache.get(cardId)
   if (cached) {
     return cached

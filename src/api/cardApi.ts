@@ -10,7 +10,8 @@ interface CardApiResponse {
   text?: { types?: string; desc?: string }
 }
 
-export async function fetchCardText(cardId: number): Promise<CardText> {
+/** cardId 为字符串，可带前导零如 "03739500"。 */
+export async function fetchCardText(cardId: string): Promise<CardText> {
   const url = `${API_BASE}/card/${cardId}`
   console.log('fetchCardText', { cardId })
   const res = await fetch(url)

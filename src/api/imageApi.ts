@@ -10,23 +10,24 @@ const RAW_CARD_IMAGE_TEMPLATE_BY_LANG: Record<CardLanguage, string> = {
 // 通过公共代理服务为卡图添加 CORS 头
 const IMAGE_PROXY_BASE = 'https://images.weserv.nl/?url='
 
+/** cardId 为字符串，可带前导零；URL 内使用原字符串。 */
 export function getRawCardImageUrl(
-  cardId: number,
+  cardId: string,
   lang: CardLanguage = 'zh',
 ): string {
   const template = RAW_CARD_IMAGE_TEMPLATE_BY_LANG[lang]
-  return template.replace('cardid', String(cardId))
+  return template.replace('cardid', cardId)
 }
 
 export function getCardImageUrl(
-  cardId: number,
+  cardId: string,
   lang: CardLanguage = 'zh',
 ): string {
   return `${IMAGE_PROXY_BASE}${encodeURIComponent(getRawCardImageUrl(cardId, lang))}`
 }
 
 export function fetchCardImage(
-  cardId: number,
+  cardId: string,
   lang: CardLanguage = 'zh',
 ): Promise<HTMLImageElement> {
   const url = getCardImageUrl(cardId, lang)
