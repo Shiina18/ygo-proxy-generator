@@ -10,13 +10,17 @@ const RAW_CARD_IMAGE_TEMPLATE_BY_LANG: Record<CardLanguage, string> = {
 // 通过公共代理服务为卡图添加 CORS 头
 const IMAGE_PROXY_BASE = 'https://images.weserv.nl/?url='
 
-/** cardId 为字符串，可带前导零；URL 内使用原字符串。 */
+/**
+ * 卡图 CDN（233）文件名无前导零，例如 3739500.webp 而非 03739500.webp。
+ * 此处仅对 URL 路径做去前导零，卡号在应用内仍为原字符串。
+ */
 export function getRawCardImageUrl(
   cardId: string,
   lang: CardLanguage = 'zh',
 ): string {
   const template = RAW_CARD_IMAGE_TEMPLATE_BY_LANG[lang]
-  return template.replace('cardid', cardId)
+  const pathId = cardId.replace(/^0+/, '') || '0'
+  return template.replace('cardid', pathId)
 }
 
 export function getCardImageUrl(
