@@ -116,57 +116,76 @@ function getSimkaiFontUrl(): string {
   return base + (base.endsWith('/') ? '' : '/') + 'simkai.ttf'
 }
 
-/** 连接建立超时（拿到响应头为止） */
-const FONT_CONNECTION_TIMEOUT_MS = 7000
-/** 读 body 超时（大文件下载可较慢） */
-const FONT_READ_BODY_TIMEOUT_MS = 60000
-
 async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
   if (!simkaiFontData) {
+    try {
     const path = getSimkaiFontUrl()
     const url = new URL(path, window.location.href).href
-    const controller =
-      typeof AbortController !== 'undefined'
-        ? new AbortController()
-        : undefined
-    let connTimeoutId: ReturnType<typeof setTimeout> | undefined
-    let readTimeoutId: ReturnType<typeof setTimeout> | undefined
-
-    const connTimeoutPromise = new Promise<never>((_, reject) => {
-      connTimeoutId = setTimeout(
-        () => {
-          controller?.abort()
-          reject(new Error('simkai.ttf 连接超时'))
-        },
-        FONT_CONNECTION_TIMEOUT_MS,
-      )
-    })
-
-    const res = await Promise.race([
-      connTimeoutPromise,
-      fetch(url, { signal: controller?.signal }),
-    ])
-    if (connTimeoutId !== undefined) clearTimeout(connTimeoutId)
+    const res = await fetch(url)
     if (!res.ok) {
       throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
     }
 
-    const readTimeoutPromise = new Promise<never>((_, reject) => {
-      readTimeoutId = setTimeout(
-        () => {
-          controller?.abort()
-          reject(new Error('simkai.ttf 下载超时'))
-        },
-        FONT_READ_BODY_TIMEOUT_MS,
-      )
-    })
+    if (typeof document !== 'undefined') {
+      const wrap = document.querySelector<HTMLElement>('#font-progress-wrap')
+      const progressEl =
+        document.querySelector<HTMLProgressElement>('#font-progress')
+      if (wrap) wrap.hidden = false
+      if (progressEl) {
+        progressEl.value = 0
+        progressEl.max = 100
+      }
+    }
 
-    const buf = await Promise.race([
-      readTimeoutPromise,
-      res.arrayBuffer(),
-    ])
-    if (readTimeoutId !== undefined) clearTimeout(readTimeoutId)
+    const total = res.headers.get('Content-Length')
+      ? parseInt(res.headers.get('Content-Length')!, 10)
+      : null
+
+    const reader = res.body!.getReader()
+    const chunks: Uint8Array[] = []
+    let loaded = 0
+    const msgEl =
+      typeof document !== 'undefined'
+        ? document.querySelector<HTMLParagraphElement>('#message')
+        : null
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      loaded += value.length
+      if (msgEl) {
+          const mb = (loaded / 1024 / 1024).toFixed(1)
+          msgEl.textContent =
+            total != null
+              ? `正在下载字体… ${mb} MB / ${(total / 1024 / 1024).toFixed(1)} MB (${Math.round((loaded / total) * 100)}%)`
+              : `正在下载字体… ${mb} MB`
+        }
+        const progressEl =
+          typeof document !== 'undefined'
+            ? document.querySelector<HTMLProgressElement>('#font-progress')
+            : null
+        if (progressEl && total != null) {
+          progressEl.value = Math.round((loaded / total) * 100)
+          progressEl.max = 100
+        }
+    }
+    reader.releaseLock()
+
+    const out = new Uint8Array(loaded)
+    let offset = 0
+    for (const c of chunks) {
+      out.set(c, offset)
+      offset += c.length
+    }
+    const buf = out.buffer
     simkaiFontData = arrayBufferToBase64(buf)
+    } finally {
+      if (typeof document !== 'undefined') {
+        const wrap = document.querySelector<HTMLElement>('#font-progress-wrap')
+        if (wrap) wrap.hidden = true
+      }
+    }
   }
   pdf.addFileToVFS('simkai.ttf', simkaiFontData)
   pdf.addFont('simkai.ttf', 'simkai', 'normal')
