@@ -115,34 +115,40 @@ function getSimkaiFontUrl(): string {
   return base + (base.endsWith('/') ? '' : '/') + 'simkai.ttf'
 }
 
+const FONT_LOAD_TIMEOUT_MS = 7000
+
 async function ensureSimkaiFont(pdf: jsPDF): Promise<void> {
   if (!simkaiFontData) {
     const path = getSimkaiFontUrl()
     const url = new URL(path, window.location.href).href
     const controller =
       typeof AbortController !== 'undefined'
-        ? (new AbortController() as AbortController)
+        ? new AbortController()
         : undefined
-    const timeoutId =
-      controller != null
-        ? (setTimeout(() => controller.abort(), 7000) as unknown as number)
-        : undefined
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
 
-    let res: Response
-    try {
-      res = await fetch(url, {
-        signal: controller?.signal as AbortSignal | undefined,
-      })
-    } finally {
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId)
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => {
+          controller?.abort()
+          reject(new Error('simkai.ttf 加载超时'))
+        },
+        FONT_LOAD_TIMEOUT_MS,
+      )
+    })
+
+    const fetchPromise = (async () => {
+      const res = await fetch(url, { signal: controller?.signal })
+      if (!res.ok) {
+        throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
       }
-    }
-    if (!res.ok) {
-      throw new Error(`simkai.ttf 加载失败: ${res.status} ${url}`)
-    }
-    const buf = await res.arrayBuffer()
-    simkaiFontData = arrayBufferToBase64(buf)
+      const buf = await res.arrayBuffer()
+      return arrayBufferToBase64(buf)
+    })()
+
+    const result = await Promise.race([timeoutPromise, fetchPromise])
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+    simkaiFontData = result
   }
   pdf.addFileToVFS('simkai.ttf', simkaiFontData)
   pdf.addFont('simkai.ttf', 'simkai', 'normal')
